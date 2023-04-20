@@ -1,0 +1,24 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*$py.class
+
+# Local development settings
+.env
+
+# Logs
+*.log
+
+# Virtual environment
+venv/
+
+# PyCharm config folder
+.idea/
+
+
+# Data files
+data/
+
+# Checkpoints
+ckps/BERTRNN/*.pt
+ckps/GPT/*.pt
