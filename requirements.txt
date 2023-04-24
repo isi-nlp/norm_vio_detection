@@ -5,6 +5,6 @@ pandarallel==1.6.3
 pandas==1.3.4
 redditcleaner==1.1.2
 scikit_learn==0.24.2
-torch==1.12.1
+torch==1.12.1+cu113
 transformers==4.27.4
 tweet_preprocessor==0.6.0
