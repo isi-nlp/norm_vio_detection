@@ -19,6 +19,10 @@ venv/
 # Data files
 data/
 
+# results files
+results/BERTRNN/*/output.txt
+results/GPT2/*/output.txt
+
 # Checkpoints
 ckps/BERTRNN/*.pt
 ckps/GPT/*.pt
