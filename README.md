@@ -1,14 +1,14 @@
 # Norm Violation Detection
 This is the repo for norm violation detection on Reddit.
 
-## Data
+## Data (Skip this if you're just doing inference)
 Decompress the data file
 ```angular2html
 tar -xzf yourfile.tar.gz
 ```
 
 
-## Checkpoint 
+## Checkpoint (Skip this if you're training the model from scratch)
 The BERTRNN model checkpoint is accessible from this Google Drive [link](https://drive.google.com/file/d/1IeRCFlrZw2JKYO0a8M_R3ibsTRd2EE3F/view?usp=sharing).
 Download the model to *ckps/BERTRNN*.
 
