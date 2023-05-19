@@ -19,10 +19,10 @@ venv/
 # Data files
 data/
 
-# results files
-results/BERTRNN/*/output.txt
-results/GPT2/*/output.txt
-
 # Checkpoints
-ckps/BERTRNN/*.pt
-ckps/GPT/*.pt
+ckps/**/**.pt
+
+# other files
+download_dataset.sh
+prompt-learning-soft-verbalizer.py
+prompt-learning.py

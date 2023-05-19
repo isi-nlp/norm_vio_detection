@@ -5,7 +5,8 @@ from evaluator import Evaluator
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', type=str, choices=('BERTRNN', 'GPT2'), default='BERTRNN')
+    parser.add_argument('--task', type=str, choices=('clf', 'prompt'), default='clf')
+    parser.add_argument('--model_name', type=str, choices=('bert-base-uncased', 't5-base'), default='t5-base')
     parser.add_argument('--idx', type=int, default=1)
 
     # data config
@@ -23,10 +24,10 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    prefix = f'results/{args.idx}'
+    prefix = f'results/{args.task}/{args.model_name}/{args.idx}/seed={args.seed}'
     with open(f'{prefix}/config.json', 'w') as f:
         config = json.load(f)
-    for name in ['max_context_size', 'max_n_tokens', 'n_rnn_layers']:
+    for name in ['max_context_size', 'max_n_tokens', 'n_rnn_layers', 'dropout']:
         args.__setattr__(name, config[name])
 
     print(json.dumps(args.__dict__, indent=2))

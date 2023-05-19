@@ -3,7 +3,6 @@ import torch
 import itertools
 from torch.utils.data import Dataset, DataLoader
 import redditcleaner
-from multiprocessing import Process
 import preprocessor as p
 
 p.set_options(p.OPT.URL, p.OPT.EMOJI)
@@ -12,38 +11,21 @@ all_cats = ['incivility', 'harassment', 'spam', 'format', 'content',
             'off-topic', 'hatespeech', 'trolling', 'meta-rules']
 
 
-class NormVioSeq(Dataset):
-    def __init__(self, phase, model_name='bert-base-uncased', sample_rate=1., n_few_shot=0,
-                 cat='all', comm='all', max_context_size=5, max_n_tokens=128, n_workers=4, seed=2022):
+class NormVioSeqInference(Dataset):
+    def __init__(self, conversations, subreddits, rules, model_name='bert-base-uncased',
+                 max_context_size=5, max_n_tokens=128, n_workers=4):
         from pandarallel import pandarallel
         pandarallel.initialize(nb_workers=n_workers, progress_bar=False)
 
-        df = pd.read_csv(f'data/{phase}.csv', converters={'context': eval})
-        if cat != 'all':
-            if cat[0] != '~':
-                mask = df['cats'].apply(lambda x: cat in x)
-            else:
-                mask = df['cats'].apply(lambda x: cat[1:] not in x)
-            df = df.loc[mask]
-        if comm != 'all':
-            if comm[0] != '~':
-                mask = df['subreddit'].apply(lambda x: comm == x)
-            else:
-                mask = df['subreddit'].apply(lambda x: comm[1:] != x)
-            df = df.loc[mask]
-        if sample_rate < 1:
-            df = df.sample(frac=sample_rate, random_state=seed)
-        if n_few_shot > 0 and phase != 'test':
-            df_few_shot = []
-            for each in all_cats:
-                df_sub = df[df['cats'].apply(lambda x: each in x)]
-                df_sub = df_sub.sample(n=n_few_shot, random_state=seed)
-                df_few_shot.append(df_sub)
-            df_few_shot = pd.concat(df_few_shot)
-            df = df_few_shot
-
+        last_comments = [conv[-1] for conv in conversations]
+        contexts = [conv[:-1] for conv in conversations]
+        df = pd.DataFrame({
+            'final_comment': last_comments,
+            'context': contexts,
+            'subreddit': subreddits,
+            'rule_texts': rules
+        })
         n = df.shape[0]
-        print(f'**********{phase} set, {n} comments**********')
 
         def truncate_context(x):
             # only keep a few predecessors
@@ -76,12 +58,6 @@ class NormVioSeq(Dataset):
         contexts = df.parallel_apply(augment_context, axis=1)
         conversations = [x + [y] for x, y in zip(contexts, comments)]
         # rule_texts = df['rule_texts'].tolist()
-        for cat in all_cats:
-            n_cat = df['cats'].apply(lambda x: cat in x).sum()
-            print(f'{cat}: {n_cat / n:.2f}')
-        print()
-        cats = df['cats'].tolist()
-        labels = df['bool_derail'].astype(int).tolist()
         conv_lens = pd.Series(conversations).apply(len).tolist()
 
         conversations_1d = list(itertools.chain(*conversations))
@@ -137,12 +113,11 @@ class NormVioSeq(Dataset):
         indices = pd.Series(range(n))
         indices.apply(pad_conv)
 
+        self.n = n
         self.input_ids = input_ids
         self.attention_mask = attention_mask
         self.subreddits = subreddits
         self.conv_lens = conv_lens
-        self.cats = cats
-        self.labels = labels
 
     def __getitem__(self, index):
         item = {
@@ -150,47 +125,25 @@ class NormVioSeq(Dataset):
             'attention_mask': self.attention_mask[index],
             'subreddit': self.subreddits[index],
             'conv_len': self.conv_lens[index],
-            'cat': self.cats[index],
-            'label': self.labels[index]
         }
         return item
 
     def __len__(self):
-        return len(self.labels)
+        return self.n
 
 
-def create_normvio_prompt_dataset(phase, sample_rate=1, n_few_shot=0,
-                                  cat='all', comm='all', max_context_size=5, seed=2022):
+def create_normvio_prompt_dataset(conversations, subreddits, rules, max_context_size=5):
     from pandarallel import pandarallel
     pandarallel.initialize(nb_workers=4)
 
-    df = pd.read_csv(f'data/{phase}.csv', converters={'context': eval})
-    if cat != 'all':
-        if cat[0] != '~':
-            mask = df['cats'].apply(lambda x: cat in x)
-        else:
-            mask = df['cats'].apply(lambda x: cat[1:] not in x)
-        df = df.loc[mask]
-    if comm != 'all':
-        if comm[0] != '~':
-            mask = df['subreddit'].apply(lambda x: comm == x)
-        else:
-            mask = df['subreddit'].apply(lambda x: comm[1:] != x)
-        df = df.loc[mask]
-    if sample_rate < 1:
-        df = df.sample(frac=sample_rate, random_state=seed)
-
-    if n_few_shot > 0 and phase != 'test':
-        df_few_shot = []
-        for each in all_cats:
-            df_sub = df[df['cats'].apply(lambda x: each in x)]
-            df_sub = df_sub.sample(n=n_few_shot, random_state=seed)
-            df_few_shot.append(df_sub)
-        df_few_shot = pd.concat(df_few_shot)
-        df = df_few_shot
-
-    n = df.shape[0]
-    print(f'**********{phase} set, {n} comments**********\n')
+    last_comments = [conv[-1] for conv in conversations]
+    contexts = [conv[:-1] for conv in conversations]
+    df = pd.DataFrame({
+        'final_comment': last_comments,
+        'context': contexts,
+        'subreddit': subreddits,
+        'rule_texts': rules
+    })
 
     def truncate_context(x):
         n = len(x)
@@ -210,38 +163,28 @@ def create_normvio_prompt_dataset(phase, sample_rate=1, n_few_shot=0,
 
     df['final_comment'] = df['final_comment'].parallel_apply(reddit_clean)
     df['context'] = df['context'].parallel_apply(reddit_batch_clean)
-    df['bool_derail'] = df['bool_derail'].astype(int)
 
     from openprompt.data_utils import InputExample
     def create_input_example(row):
         meta = {
             'subreddit': row['subreddit'],
             'rule': row['rule_texts'],
-            'cat': row['cats'],
         }
         for i in range(max_context_size):
             meta[f'comment{i}'] = row['context'][i]
         meta[f'comment{max_context_size}'] = row['final_comment']
-        return InputExample(meta=meta, label=row['bool_derail'])
+        return InputExample(meta=meta)
 
-    data = df.parallel_apply(create_input_example, axis=1).tolist()
+    data = df.apply(create_input_example, axis=1).tolist()
     for i, each in enumerate(data):
         each.guid = i
 
-    features = df['cats']
-
-    return data, features
+    return data
 
 
-def data_loader(phase, batch_size, model_name='bert-base-uncased', sample_rate=1., n_few_shot=0,
-                cat='all', comm='all', max_context_size=5, max_n_tokens=128, n_workers=4, seed=2022):
-    shuffle = True if phase == 'train' else False
-    dataset = NormVioSeq(phase=phase, model_name=model_name, sample_rate=sample_rate, n_few_shot=n_few_shot,
-                         cat=cat, comm=comm, max_context_size=max_context_size,
-                         max_n_tokens=max_n_tokens, n_workers=n_workers, seed=seed)
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=n_workers)
+def data_loader(conversations, subreddits, rules, batch_size, model_name='bert-base-uncased',
+                max_context_size=5, max_n_tokens=128, n_workers=4):
+    dataset = NormVioSeqInference(conversations, subreddits, rules, model_name=model_name,
+                                  max_context_size=max_context_size, max_n_tokens=max_n_tokens, n_workers=n_workers)
+    loader = DataLoader(dataset, batch_size=batch_size, num_workers=n_workers)
     return loader
-
-
-if __name__ == '__main__':
-    create_normvio_prompt_dataset('test')
