@@ -23,6 +23,7 @@ data/
 ckps/**/**.pt
 
 # other files
+model_performance_summary_table5.tsv
 download_dataset.sh
 prompt-learning-soft-verbalizer.py
 prompt-learning.py

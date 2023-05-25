@@ -41,3 +41,7 @@ Calling the API:
 curl -X POST -H 'Content-Type: application/json' -d '@api-test-data.json' http://localhost:5000/api
 ```
 
+
+The following is an example of the API. In the input file *api-test-data.json* there are three conversations, along with there subreddits and specified rules.
+The model outputs the confidence scores that the last comments from the conversations violate their corresponding rules.
+![api-example](api-example.png)
